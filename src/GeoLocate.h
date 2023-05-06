@@ -2,7 +2,8 @@
 #define WATCHY_GEOLOCATE_H
 
 /* GeoLocate by GuruSR (https://www.github.com/GuruSR/GeoLocate)
- * Version 1.0, June 26, 2022
+ * Version 1.0, June  26, 2022
+ * Version 1.1, March 20, 2023 - Includes threaded model.
  *
  * This library offers functionality to retrieve the current GeoLocation of the selected IP into Longitude and Latitude data.
  *
@@ -43,10 +44,12 @@ class GeoLocate{
         bool beginGeoFromWeb();
         void endGeoFromWeb();
         bool gotGeoFromWeb();
-		char City[100];
-		char Longitude[10];
-		char Latitude[10];
+        char City[128];
+        char Longitude[31];
+        char Latitude[31];
     private:
         void init();
+        static void GeoGet(void * parameter);
+        void StoreGot();
 };
 #endif

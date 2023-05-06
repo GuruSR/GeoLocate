@@ -1,7 +1,8 @@
 #include "GeoLocate.h"
 
 /* GeoLocate by GuruSR (https://www.github.com/GuruSR/GeoLocate)
- * Version 1.0, June 26, 2022
+ * Version 1.0, June  26, 2022
+ * Version 1.1, March 20, 2023 - Includes threaded model.
  *
  * This library offers functionality to retrieve the current GeoLocation of the selected IP into Longitude and Latitude data.
  *
@@ -31,11 +32,15 @@
 */
 
 static const char GLURL[] PROGMEM = "http://ip-api.com/json/?fields=city,lat,lon";
-RTC_DATA_ATTR char City[100];		// That long because of a New Zealand location is 85 characters in length!
-RTC_DATA_ATTR char Longitude[10];
-RTC_DATA_ATTR char Latitude[10];
+RTC_DATA_ATTR char City[128];        // That long because of a New Zealand location is 85 characters in length!
+RTC_DATA_ATTR char Longitude[32];
+RTC_DATA_ATTR char Latitude[32];
 RTC_DATA_ATTR bool GInited;
-bool Gbegan;
+RTC_DATA_ATTR TaskHandle_t GeoHandle = NULL;
+RTC_DATA_ATTR BaseType_t GeoRet;
+RTC_DATA_ATTR bool GGot, Gbegan, GDone;
+bool GStore;
+String sCity, sLong, sLat;
 WiFiClient gWiFiC;
 HTTPClient gHTTP;
 
@@ -43,47 +48,80 @@ HTTPClient gHTTP;
 bool GeoLocate::beginGeoFromWeb(){
     if (!GInited) init();
     if (WiFi.status() != WL_CONNECTED) return false;
-    gHTTP.begin(gWiFiC, GLURL);  // Call it and leave.
-    Gbegan = true;
+    if (GeoHandle == NULL) {
+      GDone = false;
+      GeoRet = xTaskCreate(GeoLocate::GeoGet,"GeoLocate_Get",20480,NULL,(configMAX_PRIORITIES, -1),&GeoHandle);
+      Gbegan = (GeoHandle != NULL);
+    }
     return Gbegan;
 }
 
 void GeoLocate::endGeoFromWeb(){
     if (Gbegan){
         gHTTP.end();
+		if (GeoHandle != NULL) { vTaskDelete(GeoHandle); GeoHandle = NULL; }
+        if (GStore) StoreGot();
         Gbegan = false;
     }
 }
 
 // Has the response happened?
 bool GeoLocate::gotGeoFromWeb(){
-    String S, payload;
     if (!GInited) init();
-    if (WiFi.status() != WL_CONNECTED) return false;
-    if (gHTTP.GET() == HTTP_CODE_OK) {
-        payload = gHTTP.getString();
-        JSONVar root = JSON.parse(payload);
-        S = JSON.stringify(root["city"]);
-        S.replace('"',' ');
-        S.trim();
-		strcpy(City,S.c_str());
-		City[99] = 0;	// Long City Name protection.
-        S = JSON.stringify(root["lat"]);
-        S.replace('"',' ');
-        S.trim();
-		strcpy(Latitude,S.c_str());
-        S = JSON.stringify(root["lon"]);
-        S.replace('"',' ');
-        S.trim();
-		strcpy(Longitude,S.c_str());
-        return true;
-    }
-    return false;
+    if (GStore) StoreGot();
+    return GDone;
 }
 
 void GeoLocate::init(){
     int I;
-    for (I = 0; I < 100; I++) { City[I] = 0; if (I < 10) { Longitude[I] = 0; Latitude[I] = 0; } }
+    for (I = 0; I < 128; I++) { City[I] = 0; if (I < 32) { Longitude[I] = 0; Latitude[I] = 0; } }
     GInited = true;
+    GGot = false;
     Gbegan = false;
+}
+
+void GeoLocate::GeoGet(void * parameter){
+String S, payload;
+bool Good = (WiFi.status() == WL_CONNECTED);
+bool Sent = false;
+unsigned long Stay = millis() + 4000;
+    while (Good && millis() < Stay){
+        if (!Sent) { Sent = true; gHTTP.setConnectTimeout(3000); gHTTP.begin(gWiFiC, GLURL); } // Call it and leave.
+        if (gHTTP.GET() == HTTP_CODE_OK) {
+            payload = gHTTP.getString();
+Serial.println(payload);
+            JSONVar root = JSON.parse(payload);
+            S = JSON.stringify(root["city"]);
+            S.replace('"',' ');
+            S.trim();
+            sCity = S;
+            S = JSON.stringify(root["lat"]);
+            S.replace('"',' ');
+            S.trim();
+            sLat = S;
+            S = JSON.stringify(root["lon"]);
+            S.replace('"',' ');
+            S.trim();
+            sLong = S;
+            GGot = true;
+            GStore = true;
+            Good = false;
+        }
+        delay(100);    // 100ms pauses.
+    }
+    GDone = true;
+    GeoHandle = NULL;
+    vTaskDelete(GeoHandle);
+}
+
+void GeoLocate::StoreGot(){
+    if (GStore){
+        GStore = false;
+        strcpy(City,sCity.c_str());
+        City[127] = 0;    // Long City Name protection.
+        strcpy(Latitude,sLat.c_str());
+        Latitude[31] = 0; // Long Latitude protection.
+        strcpy(Longitude,sLong.c_str());
+        Longitude[31] = 0; // Long Longitude protection.
+    }
 }
