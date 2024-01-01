@@ -1,4 +1,4 @@
-# GeoLocate
+# GeoLocate [![Arduino Lint](https://github.com/GuruSR/GeoLocate/actions/workflows/main.yml/badge.svg)](https://github.com/GuruSR/GeoLocate/actions/workflows/main.yml)
 Useful for ESP32 or Watchy users, gives 3 values after doing simple calls, captures City, Longitude and Latitude in char arrays for use with other online APIs (Weather, etc).
 
 3 functions exist:
