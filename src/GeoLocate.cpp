@@ -50,7 +50,7 @@ bool GeoLocate::beginGeoFromWeb(){
     if (WiFi.status() != WL_CONNECTED) return false;
     if (GeoHandle == NULL) {
       GDone = false;
-      GeoRet = xTaskCreate(GeoLocate::GeoGet,"GeoLocate_Get",20480,NULL,(configMAX_PRIORITIES, -1),&GeoHandle);
+      GeoRet = xTaskCreate(GeoLocate::GeoGet,"GeoLocate_Get",20480,NULL,(configMAX_PRIORITIES - 1),&GeoHandle);
       Gbegan = (GeoHandle != NULL);
     }
     return Gbegan;
